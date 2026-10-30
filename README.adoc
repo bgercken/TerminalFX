@@ -1,105 +1,97 @@
-= JavaFX Terminal Emulator
-Rahman Usta
-:doctype: article
+= TerminalFX: Java 8 serial-console terminal
 :encoding: utf-8
-:lang: en
 :toc: left
-:numbered:
-:terminalfx-version: 1.3
 
-== JavaFX Terminal Emulator
+This branch provides an embeddable JavaFX terminal emulator for an application's
+existing serial connection. The switch runs its own shell and programs such as
+`top`; TerminalFX renders their terminal sequences and returns keyboard input
+and terminal replies to the application.
 
-TerminalFX is a terminal (PTY) emulator application written in JavaFX 8.
+The terminal uses the bundled Chromium hterm engine inside JavaFX WebView.
+It retains cursor movement, screen erasure, colors, scrolling/history, VT100
+line drawing, and alternate-screen handling. No local process, PTY, JNA, or
+serial-port library is required or started by this component.
 
-We use https://github.com/traff/pty4j[Pty4J] to get VT codes from running process and https://chromium.googlesource.com/apps/libapps/+/master/hterm/[hterm.js] from Chromium project to interact with Pty4J. TerminalFX is using powerful JavaFX WebView component to run hterm.js.
+== Build and run entirely in a container
 
-== Features
-
-* Multi OS (Mac, Win, *Nix) Support
-* Terminal Emulator (Xterm)
-* Copy and Paste Support
-* CygWin Support
-* Configurable (Color, Size, Font)
-* Multi Tab Support
-
-== Usage
-
-.Default Config
-[source,java]
-----
-TerminalBuilder terminalBuilder = new TerminalBuilder();
-TerminalTab terminal = terminalBuilder.newTerminal();
-
-TabPane tabPane = new TabPane();
-tabPane.getTabs().add(terminal);    
-----
-
-image::images\default.png[]
-
-.Dark Config
-[source,java]
-----
-TerminalConfig darkConfig = new TerminalConfig();
-darkConfig.setBackgroundColor(Color.rgb(16, 16, 16));
-darkConfig.setForegroundColor(Color.rgb(240, 240, 240));
-darkConfig.setCursorColor(Color.rgb(255, 0, 0, 0.5));
-
-TerminalBuilder terminalBuilder = new TerminalBuilder(darkConfig);
-TerminalTab terminal = terminalBuilder.newTerminal();
-
-TabPane tabPane = new TabPane();
-tabPane.getTabs().add(terminal);
-----
-
-image::images\dark.png[]
-
-== CygWin Support
-
-[source,java]
-----
-TerminalConfig cygwinConfig = new TerminalConfig();
-cygwinConfig.setWindowsTerminalStarter("C:\\cygwin64\\bin\\bash -i"); <1>
-
-TerminalBuilder terminalBuilder = new TerminalBuilder(cygwinConfig);
-TerminalTab terminal = terminalBuilder.newTerminal();
-
-TabPane tabPane = new TabPane();
-tabPane.getTabs().add(terminal);  
-----
-<1> Set bash in cygwin path
-
-image::images\cygwin.png[]
-
-== Maven Dependency
-
-[source,xml]
-----
-<!-- Add repository -->
-<repositories>
-    <repository>
-    <id>terminalfx-repo</id>
-    <url>https://github.com/rahmanusta/terminalfx/raw/master/releases</url>
-    </repository>
-</repositories>
-
-<!-- Add dependency -->
-<dependency>
-    <groupId>com.asciidocfx</groupId>
-    <artifactId>terminalfx</artifactId>
-    <version>1.3</version>
-</dependency>
-----
-
-== Compile & Run
+Start Docker Desktop or Podman, then run from this checkout:
 
 [source,bash]
 ----
-git clone https://github.com/rahmanusta/TerminalFX
-cd TerminalFX
-mvn clean install
-mvn exec:java -Dexec.mainClass="com.terminalfx.AppStarter"
+./docker-test.sh
 ----
 
-== Licence
+After startup, open
+http://localhost:6080/vnc.html?autoconnect=1&resize=remote[the local terminal desktop].
+The example shows sample output; it does not connect to hardware or start a shell.
+Ctrl-C stops/removes the container. No Java installation is needed on macOS.
 
-MIT
+For automated validation:
+
+[source,bash]
+----
+SMOKE_TEST=1 ./docker-test.sh
+----
+
+Compilation and execution use an actual JDK 8 including JavaFX 8 in the container.
+All Maven library and plugin downloads are forced through Maven Central.
+The base image, Linux packages, and bundled JavaFX JDK come from their respective
+container, Ubuntu, and Azul distribution services.
+See link:docker/java8/README.txt[container instructions] for options and details.
+
+== Embed the component
+
+Construct the view on the JavaFX application thread and add it to your layout:
+
+[source,java]
+----
+TerminalView terminal = new TerminalView();
+root.setCenter(terminal); // for example, a BorderPane
+
+// Pass characters to your existing ordered serial writer without blocking the FX thread.
+terminal.setOnInput(text -> serialWriterExecutor.execute(() -> writeToSwitch(text)));
+
+// May be called on your serial-reader thread, before or after the view becomes ready.
+terminal.append(decodedSerialOutput);
+----
+
+`writeToSwitch` and `decodedSerialOutput` above represent your application's serial
+transport. Encode outgoing strings using the switch's configured charset. Use one
+persistent `InputStreamReader` or incremental decoder for incoming bytes; decoding
+each byte chunk independently can split multibyte characters. Preserve escape
+characters and carriage returns exactly. Do not convert terminal output into HTML.
+
+The input callback receives normal keystrokes, control/arrow sequences, paste, and
+terminal-generated replies. It runs on the FX thread; use an ordered writer for
+blocking I/O. The component does not own or close your serial connection.
+
+New output follows the bottom by default. Set `TerminalConfig.setScrollOnOutput(false)`
+to allow reading older history without incoming output pulling the view down.
+
+`append` queues output until initialization completes. `readyProperty()` allows
+UI code to observe readiness. `clear()` clears the current screen and homes the
+cursor. `close()` releases the WebView and is safe before readiness or when called
+more than once. Append after close throws an exception.
+
+`rowsProperty()` and `columnsProperty()` report the current display dimensions.
+Unlike SSH, serial connections do not automatically propagate window sizes. If
+needed, configure rows/columns on the switch using its supported mechanism.
+
+A `TerminalTab` wrapper and `TerminalBuilder.newTerminal()` remain available for
+tabbed interfaces. Obtain its view with `getTerminalView()`. Historical shell
+starter/path configuration no longer launches a process. Shell lifecycle and
+charset-probing methods from the old PTY implementation have been removed.
+
+== Validation scope
+
+The automated test runs real JavaFX 8 WebView/hterm assertions for queued output,
+background-reader output, cursor positioning and overwrite, line erasure, colors,
+Unicode, chunked escape sequences, VT100 line drawing, alternate screen restore,
+scrollback, input/reply callbacks, dimensions, preference updates, and cleanup.
+It also opens the example window and checks noVNC HTTP delivery. No physical
+switch or serial adapter is required by the test. Testing against your actual
+switch remains necessary for its particular terminal settings and output.
+
+== License
+
+MIT. The bundled hterm source retains its upstream copyright and license notices.

@@ -35,6 +35,10 @@ public class FXMLController implements Initializable {
         TerminalBuilder terminalBuilder = new TerminalBuilder(defaultConfig);
         TerminalTab terminal = terminalBuilder.newTerminal();
         tabPane.getTabs().add(terminal);
+        terminal.print("\033[32mTerminalFX Java 8 serial-console display\033[0m\r\n"
+                + "Connect your application's serial reader and writer to TerminalView.\r\n"
+                + "Scrolling, cursor movement, and full-screen redraws remain supported.\r\n");
+
 
     }
 

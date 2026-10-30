@@ -49,6 +49,9 @@ public class TerminalConfig {
     @JsonProperty("cursor-blink")
     private boolean cursorBlink = false;
 
+    @JsonProperty("scroll-on-output")
+    private boolean scrollOnOutput = true;
+
     @JsonProperty("scrollbar-visible")
     private boolean scrollbarVisible = true;
 
@@ -158,6 +161,10 @@ public class TerminalConfig {
         this.cursorBlink = cursorBlink;
     }
 
+    public boolean isScrollOnOutput() { return scrollOnOutput; }
+
+    public void setScrollOnOutput(boolean scrollOnOutput) { this.scrollOnOutput = scrollOnOutput; }
+
     public boolean isScrollbarVisible() {
         return scrollbarVisible;
     }
@@ -248,6 +255,7 @@ public class TerminalConfig {
         if (ctrlVPaste != that.ctrlVPaste) return false;
         if (fontSize != that.fontSize) return false;
         if (cursorBlink != that.cursorBlink) return false;
+        if (scrollOnOutput != that.scrollOnOutput) return false;
         if (scrollbarVisible != that.scrollbarVisible) return false;
         if (enableClipboardNotice != that.enableClipboardNotice) return false;
         if (Double.compare(that.scrollWhellMoveMultiplier, scrollWhellMoveMultiplier) != 0) return false;
@@ -284,6 +292,7 @@ public class TerminalConfig {
         result = 31 * result + (foregroundColor != null ? foregroundColor.hashCode() : 0);
         result = 31 * result + (cursorBlink ? 1 : 0);
         result = 31 * result + (scrollbarVisible ? 1 : 0);
+        result = 31 * result + (scrollOnOutput ? 1 : 0);
         result = 31 * result + (enableClipboardNotice ? 1 : 0);
         temp = Double.doubleToLongBits(scrollWhellMoveMultiplier);
         result = 31 * result + (int) (temp ^ (temp >>> 32));
